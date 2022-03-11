@@ -136,6 +136,10 @@ export class Server {
     this.audioPlayer.unpause();
   }
 
+  public shuffle(): void {
+    // this.audioPlayer.unpause();
+  }
+
   // Chuyển tới bài hát trong queue
   public async jump(position: number): Promise<QueueItem> {
     const target = this.queue[position - 1];
