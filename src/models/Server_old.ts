@@ -1,3 +1,4 @@
+import { servers } from '@/servers';
 import { scdl } from '@/services/soundcloud';
 import { Platform, Song } from '@/types/Song';
 import {
@@ -10,7 +11,7 @@ import {
   VoiceConnectionDisconnectReason,
   VoiceConnectionStatus,
 } from '@discordjs/voice';
-import { Snowflake } from 'discord.js';
+import _ from 'lodash';
 import ytdl from 'ytdl-core';
 
 export interface QueueItem {
@@ -36,9 +37,11 @@ export class Server {
     this.voiceConnection.on('stateChange', async (_, newState) => {
       if (newState.status === VoiceConnectionStatus.Disconnected) {
         /*
-          Nếu websocket đã bị đóng với mã 4014 có 2 khả năng:
-          - Nếu nó có khả năng tự kết nối lại (có khả năng do chuyển kênh thoại), ta cho dảnh ra 5s để tìm hiểu và cho kết nối lại.
-          - Nếu bot bị kick khỏi kênh thoại, ta sẽ phá huỷ kết nối.
+          If the WebSocket closed with a 4014 code, this means that we should not manually attempt to reconnect,
+          but there is a chance the connection will recover itself if the reason of the disconnect was due to
+          switching voice channels. This is also the same code for the bot being kicked from the voice channel,
+          so we allow 5 seconds to figure out which scenario it is. If the bot has been kicked, we should destroy
+          the voice connection.
 				*/
         if (
           newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
@@ -66,8 +69,9 @@ export class Server {
           newState.status === VoiceConnectionStatus.Signalling)
       ) {
         /*
-					Nếu tín hiệu kết nối ở trạng thái "Connecting" hoặc "Signalling", ta sẽ đợi 20s để kết nối sẵn sàng.
-          Sau 20s nếu kết nối không thành công, ta sẽ phá huỷ kết nối.
+					In the Signalling or Connecting states, we set a 20 second time limit for the connection to become ready
+					before destroying the voice connection. This stops the voice connection permanently existing in one of these
+					states.
 				*/
         this.isReady = true;
         try {
@@ -88,7 +92,7 @@ export class Server {
       }
     });
 
-    // Đây là sự kiện khi một bài hát kết thúc và ta chuyển sang bài mới.
+    // Configure audio player
     this.audioPlayer.on('stateChange', async (oldState, newState) => {
       if (
         newState.status === AudioPlayerStatus.Idle &&
@@ -114,7 +118,6 @@ export class Server {
     this.audioPlayer.stop();
   }
 
-  // Bot rời khỏi kênh thoại và xoá server hiện tại khỏi map.
   public leave(): void {
     if (this.voiceConnection.state.status !== VoiceConnectionStatus.Destroyed) {
       this.voiceConnection.destroy();
@@ -123,17 +126,14 @@ export class Server {
     servers.delete(this.guildId);
   }
 
-  // Dừng bài hát đang phát
   public pause(): void {
     this.audioPlayer.pause();
   }
 
-  // Tiếp tục bài hát bị dừng
   public resume(): void {
     this.audioPlayer.unpause();
   }
 
-  // Chuyển tới bài hát trong queue
   public async jump(position: number): Promise<QueueItem> {
     const target = this.queue[position - 1];
     this.queue = this.queue
@@ -144,14 +144,16 @@ export class Server {
     return target;
   }
 
-  // Xoá bài hát trong queue
   public remove(position: number): QueueItem {
     return this.queue.splice(position - 1, 1)[0];
   }
 
+  public shuffle(): void {
+    this.queue = _.shuffle(this.queue);
+  }
+
   public async play(): Promise<void> {
     try {
-      // Phát bài hát đầu tiên trong queue nếu queue không rỗng
       if (this.queue.length > 0) {
         this.playing = this.queue.shift() as QueueItem;
         let stream: any;
@@ -170,16 +172,11 @@ export class Server {
         const audioResource = createAudioResource(stream);
         this.audioPlayer.play(audioResource);
       } else {
-        // Dừng việc phát nhạc, gán thuộc tính playing = undefined
         this.playing = undefined;
         this.audioPlayer.stop();
       }
     } catch (e) {
-      // Nếu việc stream 1 bài hát có trục trặc gì, thì ta sẽ phát tiếp tục bài hát tiếp theo
       this.play();
     }
   }
 }
-
-// Map các server mà bot đang trong kênh thoại
-export const servers = new Map<Snowflake, Server>();
