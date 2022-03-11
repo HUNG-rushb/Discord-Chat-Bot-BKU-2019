@@ -33,70 +33,73 @@ export class Server {
     this.playing = undefined;
     this.guildId = guildId;
 
-    this.voiceConnection.on('stateChange', async (_, newState) => {
-      if (newState.status === VoiceConnectionStatus.Disconnected) {
-        /*
-          Nếu websocket đã bị đóng với mã 4014 có 2 khả năng:
-          - Nếu nó có khả năng tự kết nối lại (có khả năng do chuyển kênh thoại), ta cho dảnh ra 5s để tìm hiểu và cho kết nối lại.
-          - Nếu bot bị kick khỏi kênh thoại, ta sẽ phá huỷ kết nối.
-				*/
-        if (
-          newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
-          newState.closeCode === 4014
-        ) {
-          try {
-            await entersState(
-              this.voiceConnection,
-              VoiceConnectionStatus.Connecting,
-              5_000,
-            );
-          } catch (e) {
-            this.leave();
-          }
-        } else if (this.voiceConnection.rejoinAttempts < 5) {
-          this.voiceConnection.rejoin();
-        } else {
-          this.leave();
-        }
-      } else if (newState.status === VoiceConnectionStatus.Destroyed) {
-        this.leave();
-      } else if (
-        !this.isReady &&
-        (newState.status === VoiceConnectionStatus.Connecting ||
-          newState.status === VoiceConnectionStatus.Signalling)
-      ) {
-        /*
-					Nếu tín hiệu kết nối ở trạng thái "Connecting" hoặc "Signalling", ta sẽ đợi 20s để kết nối sẵn sàng.
-          Sau 20s nếu kết nối không thành công, ta sẽ phá huỷ kết nối.
-				*/
-        this.isReady = true;
-        try {
-          await entersState(
-            this.voiceConnection,
-            VoiceConnectionStatus.Ready,
-            20_000,
-          );
-        } catch {
-          if (
-            this.voiceConnection.state.status !==
-            VoiceConnectionStatus.Destroyed
-          )
-            this.voiceConnection.destroy();
-        } finally {
-          this.isReady = false;
-        }
-      }
-    });
+    // this.voiceConnection.on('stateChange', async (_, newState) => {
+    // // this.voiceConnection.on( async (_, newState) => {
+    //   if (newState.status === VoiceConnectionStatus.Disconnected) {
+    //     /*
+    //       Nếu websocket đã bị đóng với mã 4014 có 2 khả năng:
+    //       - Nếu nó có khả năng tự kết nối lại (có khả năng do chuyển kênh thoại), 
+		//         ta cho dảnh ra 5s để tìm hiểu và cho kết nối lại.
+    //       - Nếu bot bị kick khỏi kênh thoại, ta sẽ phá huỷ kết nối.
+		// 		*/
+    //     if (
+    //       newState.reason === VoiceConnectionDisconnectReason.WebSocketClose &&
+    //       newState.closeCode === 4014
+    //     ) {
+    //       try {
+    //         await entersState(
+    //           this.voiceConnection,
+    //           VoiceConnectionStatus.Connecting,
+    //           5_000,
+    //         );
+    //       } catch (e) {
+    //         this.leave();
+    //       }
+    //     } else if (this.voiceConnection.rejoinAttempts < 5) {
+    //       this.voiceConnection.rejoin();
+    //     } else {
+    //       this.leave();
+    //     }
+    //   } else if (newState.status === VoiceConnectionStatus.Destroyed) {
+    //     this.leave();
+    //   } else if (
+    //     !this.isReady &&
+    //     (newState.status === VoiceConnectionStatus.Connecting ||
+    //       newState.status === VoiceConnectionStatus.Signalling)
+    //   ) {
+    //     /*
+		// 			Nếu tín hiệu kết nối ở trạng thái "Connecting" hoặc "Signalling", ta sẽ đợi 20s để kết nối sẵn sàng.
+    //       Sau 20s nếu kết nối không thành công, ta sẽ phá huỷ kết nối.
+		// 		*/
+    //     this.isReady = true;
+    //     try {
+    //       await entersState(
+    //         this.voiceConnection,
+    //         VoiceConnectionStatus.Ready,
+    //         20_000,
+    //       );
+    //     } catch {
+    //       if (
+    //         this.voiceConnection.state.status !==
+    //         VoiceConnectionStatus.Destroyed
+    //       )
+    //         this.voiceConnection.destroy();
+    //     } finally {
+    //       this.isReady = false;
+    //     }
+    //   }
+    // });
 
-    // Đây là sự kiện khi một bài hát kết thúc và ta chuyển sang bài mới.
-    this.audioPlayer.on('stateChange', async (oldState, newState) => {
-      if (
-        newState.status === AudioPlayerStatus.Idle &&
-        oldState.status !== AudioPlayerStatus.Idle
-      ) {
-        await this.play();
-      }
-    });
+    // // Đây là sự kiện khi một bài hát kết thúc và ta chuyển sang bài mới.
+    // this.audioPlayer.on('stateChange', async (oldState, newState) => {
+    // // this.audioPlayer.on('stateChange', async (oldState, newState) => {
+    //   if (
+    //     newState.status === AudioPlayerStatus.Idle &&
+    //     oldState.status !== AudioPlayerStatus.Idle
+    //   ) {
+    //     await this.play();
+    //   }
+    // });
 
     voiceConnection.subscribe(this.audioPlayer);
   }
